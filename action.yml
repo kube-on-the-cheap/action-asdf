@@ -1,0 +1,68 @@
+name: "Setup asdf"
+description: "Set a local asdf environment, install all tools and optionally run pre-commit"
+inputs:
+  run-pre-commit:
+    description: "Run pre-commit after setup"
+    required: false
+    default: "false"
+  target-all-files:
+    description: "Run checks on all files in the repo. Defaults to 'false' to account only for the changed file in this branch."
+    required: false
+    default: "false"
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout the repo, all branches, all commits
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Verify there's a .tool-versions
+      shell: bash
+      run: |
+        if [ ! -s '.tool-versions' ]; then
+          echo "::error ::The .tool-versions file does not exists or is empty"
+          exit 1
+        fi
+    - name: Run pre-commit
+      if: inputs.run-pre-commit == 'true'
+      shell: bash
+      run: |
+        if [ "$(grep -c pre-commit .tool-versions)" -ne "1" ]; then
+          echo "::error ::The .tool-versions does not contain a pre-commit version"
+          exit 1
+        fi
+    - name: Cache asdf initialization
+      id: cache_asdf
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-asdf
+      with:
+        path: |
+          ~/.asdf
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ env.cache-name }}-
+          ${{ runner.os }}-
+    - name: Install asdf and tools
+      if: ${{ steps.cache_asdf.outputs.cache-hit != 'true' }}
+      uses: asdf-vm/actions/install@v2
+    - name: Get changed files
+      id: changed-files
+      uses: tj-actions/changed-files@v35.9.0
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    - name: Run pre-commit
+      if: inputs.run-pre-commit == 'true'
+      shell: bash
+      run: |
+        if [ "${{ steps.changed-files.outputs.any_changed == 'true' }}" ]; then
+          if [ "${{ inputs.target-all-files == 'true' }}" ]; then
+            pre-commit run --all-files
+          else
+            pre-commit run --files ${{ steps.changed-files.outputs.all_changed_files }}
+          fi
+        else
+          echo "::notice ::No changed files, skipping pre-commit run"
+        fi
