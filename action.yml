@@ -31,8 +31,8 @@ runs:
           echo "::error ::The .tool-versions file does not contain a pre-commit version"
           exit 1
         fi
-    - name: Cache asdf initialization
-      id: cache_asdf
+    - name: Attempt to restore asdf from cache
+      id: cache_asdf_restore
       uses: actions/cache@v3
       env:
         cache-name: cache-asdf
@@ -44,8 +44,18 @@ runs:
           ${{ runner.os }}-${{ env.cache-name }}-
           ${{ runner.os }}-
     - name: Install asdf and tools
-      if: ${{ steps.cache_asdf.outputs.cache-hit != 'true' }}
+      if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
       uses: asdf-vm/actions/install@v2
+    - name: Commit asdf install in cache
+      id: cache_asdf_save
+      if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v3
+      env:
+        cache-name: cache-asdf
+      with:
+        path: |
+          ~/.asdf
+        key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
     - name: Get changed files
       id: changed-files
       uses: tj-actions/changed-files@v35.9.0
