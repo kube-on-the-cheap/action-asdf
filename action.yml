@@ -33,16 +33,12 @@ runs:
         fi
     - name: Attempt to restore asdf from cache
       id: cache_asdf_restore
-      uses: actions/cache@v3
+      uses: actions/cache/restore@v3
       env:
         cache-name: cache-asdf
       with:
-        path: |
-          ~/.asdf
+        path: ~/.asdf
         key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ env.cache-name }}-
-          ${{ runner.os }}-
     - name: Install asdf and tools
       if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
       uses: asdf-vm/actions/install@v2
@@ -53,9 +49,11 @@ runs:
       env:
         cache-name: cache-asdf
       with:
-        path: |
-          ~/.asdf
+        path: ~/.asdf
         key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
+    - shell: bash
+      run: |
+        ls -la .
     - name: Get changed files
       id: changed-files
       uses: tj-actions/changed-files@v35.9.0
