@@ -9,6 +9,10 @@ inputs:
     description: "Run checks on all files in the repo. Defaults to 'false' to account only for the changed file in this branch."
     required: false
     default: "false"
+  python-version:
+    description: "The Python version to install"
+    required: false
+    default: "3.11"
 runs:
   using: "composite"
   steps:
@@ -16,6 +20,8 @@ runs:
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    # fail fast if asdf cannot run
     - name: Verify there's a .tool-versions
       shell: bash
       run: |
@@ -23,7 +29,9 @@ runs:
           echo "::error ::The .tool-versions file does not exists or is empty"
           exit 1
         fi
-    - name: Verify the .tool-versions contains a pre-commit version
+
+    # fail fast if pre-commit cannot run
+    - name: "[PRE-COMMIT] Verify the .tool-versions contains a pre-commit version"
       if: inputs.run-pre-commit == 'true'
       shell: bash
       run: |
@@ -31,6 +39,7 @@ runs:
           echo "::error ::The .tool-versions file does not contain a pre-commit version"
           exit 1
         fi
+
     - name: Attempt to restore asdf from cache
       id: cache_asdf_restore
       uses: actions/cache/restore@v3
@@ -39,16 +48,12 @@ runs:
       with:
         path: ~/.asdf
         key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
-    - name: Install asdf and tools
+
+    - name: If not restored, install asdf and tools
       if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
       uses: asdf-vm/actions/install@v2
-    - name: Run asdf setup to restore shims
-      if: ${{ steps.cache_asdf_restore.outputs.cache-hit == 'true' }}
-      uses: asdf-vm/actions/setup@v2
-      with:
-        skip_install: true
-    - name: Commit asdf install in cache
-      id: cache_asdf_save
+
+    - name: If not restored, cache asdf install
       if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
       uses: actions/cache/save@v3
       env:
@@ -56,27 +61,59 @@ runs:
       with:
         path: ~/.asdf
         key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
+
+    - name: If restored, run asdf setup to restore shims
+      if: ${{ steps.cache_asdf_restore.outputs.cache-hit == 'true' }}
+      uses: asdf-vm/actions/setup@v2
+      with:
+        skip_install: true
+
     - name: Get changed files
       id: changed-files
       uses: tj-actions/changed-files@v35.9.0
-    - name: Set up Python 3.11
+
+    - name: Set up Python
+      id: python-setup
       uses: actions/setup-python@v4
       with:
-        python-version: "3.11"
-    - name: Verify that pre-commit config is good
+        python-version: "${{ inputs.python-version }}"
+
+    - name: "[PRE-COMMIT] Attempt to restore initialized pre-commit env from cache"
       if: inputs.run-pre-commit == 'true'
+      id: cache_pre_commit_restore
+      uses: actions/cache/restore@v3
+      env:
+        cache-name: cache-pre-commit
+      with:
+        path: ~/.cache/pre-commit
+        # The [official example](https://pre-commit.com/#github-actions-example) says to factor in the python version too
+        key: ${{ runner.os }}-${{ env.cache-name }}-py${{ steps.python-setup.output.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+    - name: "[PRE-COMMIT] If not restored, verify that pre-commit config is good and initialize environment"
+      if: (inputs.run-pre-commit == 'true') && (steps.cache_pre_commit_restore.outputs.cache-hit != 'true')
       shell: bash
       run: |
         if [ ! -s '.pre-commit-config.yaml' ] || ! pre-commit validate-config .pre-commit-config.yaml &>/dev/null ; then
           echo "::error ::The .pre-commit-config.yaml file does not exists or is invalid"
           exit 1
         fi
-    - name: Run pre-commit
+
+    - name: "[PRE-COMMIT] If not restored, cache the initialized pre-commit env"
+      if: (inputs.run-pre-commit == 'true') && (steps.cache_pre_commit_restore.outputs.cache-hit != 'true')
+      uses: actions/cache/save@v3
+      env:
+        cache-name: cache-pre-commit
+      with:
+        path: ~/.cache/pre-commit
+        # The [official example](https://pre-commit.com/#github-actions-example) says to factor in the python version too
+        key: ${{ runner.os }}-${{ env.cache-name }}-py${{ steps.python-setup.output.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+    - name: "[PRE-COMMIT] Run pre-commit"
       if: inputs.run-pre-commit == 'true'
       shell: bash
       run: |
-        if [ "${{ steps.changed-files.outputs.any_changed == 'true' }}" ]; then
-          if [ "${{ inputs.target-all-files == 'true' }}" ]; then
+        if [ -z "${{ steps.changed-files.outputs.all_changed_files }}" ]; then
+          if [ "${{ inputs.target-all-files }}" == "true" ]; then
             pre-commit run --all-files
           else
             pre-commit run --files ${{ steps.changed-files.outputs.all_changed_files }}
