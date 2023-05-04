@@ -42,6 +42,11 @@ runs:
     - name: Install asdf and tools
       if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
       uses: asdf-vm/actions/install@v2
+    - name: Run asdf setup to restore shims
+      if: ${{ steps.cache_asdf_restore.outputs.cache-hit == 'true' }}
+      uses: asdf-vm/actions/setup@v2
+      with:
+        skip_install: true
     - name: Commit asdf install in cache
       id: cache_asdf_save
       if: ${{ steps.cache_asdf_restore.outputs.cache-hit != 'true' }}
@@ -51,9 +56,6 @@ runs:
       with:
         path: ~/.asdf
         key: ${{ runner.os }}-${{ env.cache-name }}-${{ hashFiles('.tool-versions') }}
-    - shell: bash
-      run: |
-        ls -la .
     - name: Get changed files
       id: changed-files
       uses: tj-actions/changed-files@v35.9.0
