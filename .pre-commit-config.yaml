@@ -2,6 +2,13 @@ default_install_hook_types:
   - pre-commit
   - pre-push
   - commit-msg
+# Stage names now match git hooks; requires pre-commit >= 3.2.0
+default_stages:
+  - post-checkout
+  - post-merge
+  - post-rewrite
+  - pre-commit
+  - pre-rebase
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

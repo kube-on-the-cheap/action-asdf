@@ -23,12 +23,12 @@ runs:
           echo "::error ::The .tool-versions file does not exists or is empty"
           exit 1
         fi
-    - name: Run pre-commit
+    - name: Verify the .tool-versions contains a pre-commit version
       if: inputs.run-pre-commit == 'true'
       shell: bash
       run: |
         if [ "$(grep -c pre-commit .tool-versions)" -ne "1" ]; then
-          echo "::error ::The .tool-versions does not contain a pre-commit version"
+          echo "::error ::The .tool-versions file does not contain a pre-commit version"
           exit 1
         fi
     - name: Cache asdf initialization
@@ -53,6 +53,14 @@ runs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.11"
+    - name: Verify that pre-commit config is good
+      if: inputs.run-pre-commit == 'true'
+      shell: bash
+      run: |
+        if [ ! -s '.pre-commit-config.yaml' ] || ! pre-commit validate-config .pre-commit-config.yaml &>/dev/null ; then
+          echo "::error ::The .pre-commit-config.yaml file does not exists or is invalid"
+          exit 1
+        fi
     - name: Run pre-commit
       if: inputs.run-pre-commit == 'true'
       shell: bash

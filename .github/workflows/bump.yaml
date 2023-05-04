@@ -29,3 +29,4 @@ jobs:
           tag: ${{ needs.bump-version.outputs.new_tag }}
           name: ${{ needs.bump-version.outputs.new_tag }}
           body: ${{ needs.bump-version.outputs.changelog }}
+          generateReleaseNotes: true
