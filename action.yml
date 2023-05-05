@@ -89,7 +89,7 @@ runs:
         # The [official example](https://pre-commit.com/#github-actions-example) says to factor in the python version too
         key: ${{ runner.os }}-${{ env.cache-name }}-py${{ steps.python-setup.output.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
-    - name: "[PRE-COMMIT] If not restored, verify that pre-commit config is good and initialize environment"
+    - name: "[PRE-COMMIT] If not restored, verify that pre-commit config is good before run"
       if: (inputs.run-pre-commit == 'true') && (steps.cache_pre_commit_restore.outputs.cache-hit != 'true')
       shell: bash
       run: |
@@ -98,21 +98,11 @@ runs:
           exit 1
         fi
 
-    - name: "[PRE-COMMIT] If not restored, cache the initialized pre-commit env"
-      if: (inputs.run-pre-commit == 'true') && (steps.cache_pre_commit_restore.outputs.cache-hit != 'true')
-      uses: actions/cache/save@v3
-      env:
-        cache-name: cache-pre-commit
-      with:
-        path: ~/.cache/pre-commit
-        # The [official example](https://pre-commit.com/#github-actions-example) says to factor in the python version too
-        key: ${{ runner.os }}-${{ env.cache-name }}-py${{ steps.python-setup.output.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
-
     - name: "[PRE-COMMIT] Run pre-commit"
       if: inputs.run-pre-commit == 'true'
       shell: bash
       run: |
-        if [ -z "${{ steps.changed-files.outputs.all_changed_files }}" ]; then
+        if [ -n "${{ steps.changed-files.outputs.all_changed_files }}" ]; then
           if [ "${{ inputs.target-all-files }}" == "true" ]; then
             pre-commit run --all-files
           else
@@ -121,3 +111,13 @@ runs:
         else
           echo "::notice ::No changed files, skipping pre-commit run"
         fi
+
+    - name: "[PRE-COMMIT] If not restored, cache the initialized pre-commit env - even if failed"
+      if: ( always() ) && ( (inputs.run-pre-commit == 'true') && (steps.cache_pre_commit_restore.outputs.cache-hit != 'true') )
+      uses: actions/cache/save@v3
+      env:
+        cache-name: cache-pre-commit
+      with:
+        path: ~/.cache/pre-commit
+        # The [official example](https://pre-commit.com/#github-actions-example) says to factor in the python version too
+        key: ${{ runner.os }}-${{ env.cache-name }}-py${{ steps.python-setup.output.python-version }}-${{ hashFiles('.pre-commit-config.yaml') }}
